@@ -7,13 +7,16 @@ from services.automation_service import AutomationService
 from services.proxy_service import ProxyService
 from services.api_service import ApiService
 from services.system_service import SystemService
+from ui.theme import Theme
 
 class MainWindow:
     def __init__(self, root):
         self.root = root
         self.root.title("TSB WORKER - FB Automation Pro (Licensed)")
         self.root.geometry("1300x780")
-        self.root.configure(bg="#0f1115")
+
+        self.theme = Theme("dark")
+        self.root.configure(bg=self.theme.colors["bg_root"])
 
         self.config = self.load_config()
         
@@ -37,7 +40,6 @@ class MainWindow:
             return {}
 
     def save_config(self):
-        # UI থেকে ভاتলু আপডেট করা
         self.config["threads"] = self.threads_var.get()
         self.config["vpn_regions"] = self.vpn_var.get()
         self.config["enable_2fa"] = self.chk_2fa.get()
@@ -84,72 +86,100 @@ class MainWindow:
         messagebox.showinfo("Saved", "Configuration saved successfully!")
 
     def setup_styles(self):
+        c = self.theme.colors
         style = ttk.Style()
         style.theme_use("clam")
         style.configure(
             "Treeview",
-            background="#14171d",
-            foreground="#e0e0e0",
-            fieldbackground="#14171d",
-            rowheight=28,
+            background=c["bg_card"],
+            foreground=c["fg_primary"],
+            fieldbackground=c["bg_card"],
+            rowheight=30,
             borderwidth=0,
             font=("Segoe UI", 9)
         )
         style.configure(
             "Treeview.Heading",
-            background="#1a1e26",
-            foreground="#2ecc71",
+            background=c["bg_sub"],
+            foreground=c["accent_green"],
             font=("Segoe UI", 9, "bold"),
             borderwidth=0
         )
-        style.map("Treeview", background=[("selected", "#1f3a2e")])
+        style.map("Treeview", background=[("selected", c["accent_green"])])
+
+        style.configure("Console.TNotebook", background=c["bg_root"], borderwidth=0)
+        style.configure("Console.TNotebook.Tab", background=c["bg_card"], foreground=c["fg_secondary"], font=("Segoe UI", 8, "bold"), padding=[14, 6])
+        style.map("Console.TNotebook.Tab", background=[("selected", c["accent_green"])], foreground=[("selected", c["bg_root"])])
+
+    def toggle_theme(self):
+        new_mode = self.theme.toggle()
+        self.root.configure(bg=self.theme.colors["bg_root"])
+        for widget in self.root.winfo_children():
+            widget.destroy()
+        self.setup_styles()
+        self.build_top_nav()
+        self.build_sub_header()
+        self.build_config_panels()
+        self.build_bottom_bar()
+        self.append_log(f"Theme switched to {new_mode.upper()} mode.")
 
     def build_top_nav(self):
-        top_frame = tk.Frame(self.root, bg="#14171d", height=60, padx=15)
+        c = self.theme.colors
+        top_frame = tk.Frame(self.root, bg=c["bg_top"], height=60, padx=15)
         top_frame.pack(fill="x", side="top")
         top_frame.pack_propagate(False)
 
-        tk.Label(top_frame, text="⚡ TSB WORKER", bg="#14171d", fg="#ffffff", font=("Segoe UI", 13, "bold")).pack(side="left")
-        tk.Label(top_frame, text=" PRO ", bg="#2ecc71", fg="#0f1115", font=("Segoe UI", 9, "bold")).pack(side="left", padx=(5, 15))
+        tk.Label(top_frame, text="⚡ TSB WORKER", bg=c["bg_top"], fg=c["fg_primary"], font=("Segoe UI", 13, "bold")).pack(side="left")
+        tk.Label(top_frame, text=" PRO ", bg=c["accent_green"], fg=c["bg_root"], font=("Segoe UI", 9, "bold")).pack(side="left", padx=(5, 15))
 
-        self.status_label = tk.Label(top_frame, text="● SYSTEM READY", bg="#14171d", fg="#95a5a6", font=("Segoe UI", 9, "bold"))
+        self.status_label = tk.Label(top_frame, text="● SYSTEM READY", bg=c["bg_top"], fg=c["fg_secondary"], font=("Segoe UI", 9, "bold"))
         self.status_label.pack(side="left", padx=10)
 
-        btn_dash = tk.Button(top_frame, text="🏠 Dashboard", bg="#183629", fg="#2ecc71", font=("Segoe UI", 9, "bold"), relief="flat", padx=12, pady=5, cursor="hand2")
-        btn_dash.pack(side="left", padx=8)
+        toggle_text = "🌙 DARK MODE" if self.theme.mode == "light" else "☀️ LIGHT MODE"
+        self.theme_toggle_btn = tk.Button(
+            top_frame,
+            text=toggle_text,
+            bg=c["btn_bg"],
+            fg=c["btn_fg"],
+            activebackground=c["btn_hover"],
+            activeforeground=c["btn_fg"],
+            font=("Segoe UI", 8, "bold"),
+            relief="flat",
+            padx=10,
+            pady=4,
+            command=self.toggle_theme,
+            cursor="hand2"
+        )
+        self.theme_toggle_btn.pack(side="left", padx=10)
 
-        btn_settings = tk.Button(top_frame, text="⚙ Settings", bg="#1a1e26", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", padx=12, pady=5, cursor="hand2")
-        btn_settings.pack(side="left", padx=4)
-
-        # Start & Stop Engine Buttons
-        btn_stop = tk.Button(top_frame, text="■ STOP", bg="#38191b", fg="#ff6b6b", font=("Segoe UI", 9, "bold"), relief="flat", padx=14, pady=6, cursor="hand2", command=self.stop_engine)
+        btn_stop = tk.Button(top_frame, text="■ STOP", bg="#38191b" if self.theme.mode=="dark" else "#fee2e2", fg=c["error"], font=("Segoe UI", 9, "bold"), relief="flat", padx=14, pady=6, cursor="hand2", command=self.stop_engine)
         btn_stop.pack(side="right", padx=(8, 0))
 
-        btn_start = tk.Button(top_frame, text="▶ START ENGINE", bg="#27ae60", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", padx=18, pady=6, cursor="hand2", command=self.start_engine)
+        btn_start = tk.Button(top_frame, text="▶ START ENGINE", bg=c["accent_green"], fg=c["bg_root"], font=("Segoe UI", 9, "bold"), relief="flat", padx=18, pady=6, cursor="hand2", command=self.start_engine)
         btn_start.pack(side="right")
 
-        # License Box
-        lic_frame = tk.Frame(top_frame, bg="#12151b", bd=1, relief="solid", padx=8, pady=3)
+        lic_frame = tk.Frame(top_frame, bg=c["bg_sub"], bd=1, relief="solid", padx=8, pady=3)
         lic_frame.pack(side="right", padx=15)
-        tk.Label(lic_frame, text="ID: TSB-7B6C07EA15", bg="#12151b", fg="#8c95a1", font=("Consolas", 8)).pack(anchor="w")
-        tk.Label(lic_frame, text="📅 2089-10-10 (22981 Days Left)", bg="#12151b", fg="#2ecc71", font=("Consolas", 8)).pack(anchor="w")
+        tk.Label(lic_frame, text="ID: TSB-7B6C07EA15", bg=c["bg_sub"], fg=c["fg_muted"], font=("Consolas", 8)).pack(anchor="w")
+        tk.Label(lic_frame, text="📅 2089-10-10 (22981 Days Left)", bg=c["bg_sub"], fg=c["accent_green"], font=("Consolas", 8)).pack(anchor="w")
 
     def build_sub_header(self):
-        sub_frame = tk.Frame(self.root, bg="#12151b", height=45, padx=15)
+        c = self.theme.colors
+        sub_frame = tk.Frame(self.root, bg=c["bg_sub"], height=45, padx=15)
         sub_frame.pack(fill="x", side="top")
         sub_frame.pack_propagate(False)
 
-        tk.Label(sub_frame, text="Gmail API:", bg="#12151b", fg="#8c95a1", font=("Segoe UI", 9)).pack(side="left")
+        tk.Label(sub_frame, text="Gmail API:", bg=c["bg_sub"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(side="left")
         self.gmail_api_cb = ttk.Combobox(sub_frame, values=["https://tsbotp.site"], width=18, state="readonly")
         self.gmail_api_cb.set("https://tsbotp.site")
         self.gmail_api_cb.pack(side="left", padx=8)
 
-        tk.Label(sub_frame, text="Phone API:", bg="#12151b", fg="#8c95a1", font=("Segoe UI", 9)).pack(side="left", padx=(15, 0))
+        tk.Label(sub_frame, text="Phone API:", bg=c["bg_sub"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(side="left", padx=(15, 0))
         self.phone_api_cb = ttk.Combobox(sub_frame, values=["Facebook Create by Gmail"], width=22, state="readonly")
         self.phone_api_cb.set("Facebook Create by Gmail")
         self.phone_api_cb.pack(side="left", padx=8)
 
-        tk.Label(sub_frame, text="Country:", bg="#12151b", fg="#8c95a1", font=("Segoe UI", 9)).pack(side="left", padx=(15, 0))
+        tk.Label(sub_frame, text="Country:", bg=c["bg_sub"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(side="left", padx=(15, 0))
         self.country_cb = ttk.Combobox(
             sub_frame,
             values=["Canada", "USA", "UK"],
@@ -160,26 +190,27 @@ class MainWindow:
         self.country_cb.pack(side="left", padx=8)
         self.country_cb.bind("<<ComboboxSelected>>", self.on_country_changed)
 
-        btn_save_top = tk.Button(sub_frame, text="✔ Save", bg="#2ecc71", fg="#0f1115", font=("Segoe UI", 9, "bold"), relief="flat", padx=12, pady=4, command=self.save_config, cursor="hand2")
+        btn_save_top = tk.Button(sub_frame, text="✔ Save", bg=c["accent_green"], fg=c["bg_root"], font=("Segoe UI", 9, "bold"), relief="flat", padx=12, pady=4, command=self.save_config, cursor="hand2")
         btn_save_top.pack(side="right", padx=10)
 
-        tk.Label(sub_frame, text="Stock: 1430 (Live API)", bg="#12151b", fg="#2ecc71", font=("Segoe UI", 9)).pack(side="right", padx=15)
+        tk.Label(sub_frame, text="Stock: 1430 (Live API)", bg=c["bg_sub"], fg=c["accent_green"], font=("Segoe UI", 9)).pack(side="right", padx=15)
 
     def build_config_panels(self):
-        container = tk.Frame(self.root, bg="#0f1115", padx=12, pady=10)
+        c = self.theme.colors
+        container = tk.Frame(self.root, bg=c["bg_root"], padx=12, pady=10)
         container.pack(fill="x")
 
         # ১. AUTOMATION PANEL
-        p1 = tk.LabelFrame(container, text=" ⚙ AUTOMATION ", bg="#14171d", fg="#2ecc71", font=("Segoe UI", 9, "bold"), bd=1, relief="solid", padx=10, pady=8)
+        p1 = tk.LabelFrame(container, text=" ⚙ AUTOMATION ", bg=c["bg_panel"], fg=c["accent_green"], font=("Segoe UI", 9, "bold"), bd=1, relief="solid", padx=10, pady=8)
         p1.pack(side="left", fill="both", expand=True, padx=4)
 
-        tk.Label(p1, text="Threads (e.g. 1,2,3):", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p1, text="Threads (e.g. 1,2,3):", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.threads_var = tk.StringVar(value=self.config.get("threads", "1,2"))
-        tk.Entry(p1, textvariable=self.threads_var, bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 8), ipady=3)
+        tk.Entry(p1, textvariable=self.threads_var, bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 8), ipady=3)
 
-        tk.Label(p1, text="VPN Regions:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p1, text="VPN Regions:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.vpn_var = tk.StringVar(value=self.config.get("vpn_regions", "UK - Docklands, UK"))
-        tk.Entry(p1, textvariable=self.vpn_var, bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 8), ipady=3)
+        tk.Entry(p1, textvariable=self.vpn_var, bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 8), ipady=3)
 
         self.chk_2fa = tk.BooleanVar(value=self.config.get("enable_2fa", True))
         self.chk_cookie = tk.BooleanVar(value=self.config.get("extract_cookie", False))
@@ -190,41 +221,41 @@ class MainWindow:
 
         for text, var in [("Enable 2FA", self.chk_2fa), ("Extract Cookie", self.chk_cookie), ("Add Email", self.chk_email), 
                           ("Delete Old Contact", self.chk_contact), ("Reuse Gmail", self.chk_reuse_gmail), ("Reuse Number", self.chk_reuse_num)]:
-            tk.Checkbutton(p1, text=text, variable=var, bg="#14171d", fg="white", selectcolor="#1a1e26", activebackground="#14171d", activeforeground="white", font=("Segoe UI", 9)).pack(anchor="w", pady=1)
+            tk.Checkbutton(p1, text=text, variable=var, bg=c["bg_panel"], fg=c["fg_primary"], selectcolor=c["bg_input"], activebackground=c["bg_panel"], activeforeground=c["fg_primary"], font=("Segoe UI", 9)).pack(anchor="w", pady=1)
 
         # ২. SUPER PROXY PANEL
-        p2 = tk.LabelFrame(container, text=" 🔵 SUPER PROXY ", bg="#14171d", fg="#3498db", font=("Segoe UI", 9, "bold"), bd=1, relief="solid", padx=10, pady=8)
+        p2 = tk.LabelFrame(container, text=" 🔵 SUPER PROXY ", bg=c["bg_panel"], fg=c["accent_blue"], font=("Segoe UI", 9, "bold"), bd=1, relief="solid", padx=10, pady=8)
         p2.pack(side="left", fill="both", expand=True, padx=4)
 
         self.chk_proxy = tk.BooleanVar(value=self.config.get("enable_proxy", True))
-        tk.Checkbutton(p2, text="Enable Super Proxy Setup", variable=self.chk_proxy, bg="#14171d", fg="#3498db", selectcolor="#1a1e26", activebackground="#14171d", activeforeground="#3498db", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 6))
+        tk.Checkbutton(p2, text="Enable Super Proxy Setup", variable=self.chk_proxy, bg=c["bg_panel"], fg=c["accent_blue"], selectcolor=c["bg_input"], activebackground=c["bg_panel"], activeforeground=c["accent_blue"], font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 6))
 
-        tk.Label(p2, text="Type:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p2, text="Type:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.proxy_type_cb = ttk.Combobox(p2, values=["other", "socks5", "http"], state="readonly")
         self.proxy_type_cb.set(self.config.get("proxy_type", "other"))
         self.proxy_type_cb.pack(fill="x", pady=(2, 6))
 
-        tk.Label(p2, text="Server:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p2, text="Server:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.proxy_server_var = tk.StringVar(value=self.config.get("proxy_server", "gw.dataimpulse.com"))
-        tk.Entry(p2, textvariable=self.proxy_server_var, bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
+        tk.Entry(p2, textvariable=self.proxy_server_var, bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
 
-        tk.Label(p2, text="Port:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p2, text="Port:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.proxy_port_var = tk.StringVar(value=self.config.get("proxy_port", "823"))
-        tk.Entry(p2, textvariable=self.proxy_port_var, bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
+        tk.Entry(p2, textvariable=self.proxy_port_var, bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
 
-        tk.Label(p2, text="User:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p2, text="User:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.proxy_user_var = tk.StringVar(value=self.config.get("proxy_user", ""))
-        tk.Entry(p2, textvariable=self.proxy_user_var, bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
+        tk.Entry(p2, textvariable=self.proxy_user_var, bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
 
-        tk.Label(p2, text="Pass:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p2, text="Pass:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.proxy_pass_var = tk.StringVar(value=self.config.get("proxy_pass", ""))
-        tk.Entry(p2, textvariable=self.proxy_pass_var, show="*", bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
+        tk.Entry(p2, textvariable=self.proxy_pass_var, show="*", bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
 
         # ৩. EXTERNAL APIS PANEL
-        p3 = tk.LabelFrame(container, text=" 🔑 EXTERNAL APIS ", bg="#14171d", fg="#9b59b6", font=("Segoe UI", 9, "bold"), bd=1, relief="solid", padx=10, pady=8)
+        p3 = tk.LabelFrame(container, text=" 🔑 EXTERNAL APIS ", bg=c["bg_panel"], fg=c["accent_purple"], font=("Segoe UI", 9, "bold"), bd=1, relief="solid", padx=10, pady=8)
         p3.pack(side="left", fill="both", expand=True, padx=4)
 
-        tk.Label(p3, text="API Header Key:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p3, text="API Header Key:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.api_header_key_var = tk.StringVar(
             value=os.environ.get(
                 "FB_WORKER_NEZ_KEY",
@@ -234,45 +265,45 @@ class MainWindow:
                 )
             )
         )
-        tk.Entry(p3, textvariable=self.api_header_key_var, bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
+        tk.Entry(p3, textvariable=self.api_header_key_var, bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
 
-        tk.Label(p3, text="Public API URL:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p3, text="Public API URL:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.public_api_url_var = tk.StringVar(
             value=self.config.get(
                 "public_api_url",
                 ApiService.DEFAULT_PUBLIC_API_URL
             )
         )
-        tk.Entry(p3, textvariable=self.public_api_url_var, bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
+        tk.Entry(p3, textvariable=self.public_api_url_var, bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
 
-        tk.Label(p3, text="API Header:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p3, text="API Header:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.public_api_header_var = tk.StringVar(
             value=self.config.get(
                 "public_api_header",
                 ApiService.DEFAULT_PUBLIC_API_HEADER
             )
         )
-        tk.Entry(p3, textvariable=self.public_api_header_var, bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
+        tk.Entry(p3, textvariable=self.public_api_header_var, bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
 
-        tk.Label(p3, text="Live Access URL:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p3, text="Live Access URL:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.public_api_liveaccess_url_var = tk.StringVar(
             value=self.config.get(
                 "public_api_liveaccess_url",
                 ApiService.DEFAULT_LIVEACCESS_URL
             )
         )
-        tk.Entry(p3, textvariable=self.public_api_liveaccess_url_var, bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
+        tk.Entry(p3, textvariable=self.public_api_liveaccess_url_var, bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
 
-        tk.Label(p3, text="Console URL:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p3, text="Console URL:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.public_api_console_url_var = tk.StringVar(
             value=self.config.get(
                 "public_api_console_url",
                 ApiService.DEFAULT_CONSOLE_URL
             )
         )
-        tk.Entry(p3, textvariable=self.public_api_console_url_var, bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
+        tk.Entry(p3, textvariable=self.public_api_console_url_var, bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
 
-        tk.Label(p3, text="Nez Range:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p3, text="Nez Range:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.nez_range_var = tk.StringVar(
             value=self.config.get(
                 "nez_range",
@@ -282,16 +313,16 @@ class MainWindow:
         range_entry = tk.Entry(
             p3,
             textvariable=self.nez_range_var,
-            bg="#1a1e26",
-            fg="white",
-            insertbackground="white",
+            bg=c["bg_input"],
+            fg=c["fg_primary"],
+            insertbackground=c["fg_primary"],
             relief="flat",
             font=("Segoe UI", 9)
         )
         range_entry.pack(fill="x", pady=(2, 6), ipady=3)
         range_entry.bind("<KeyRelease>", self.on_range_changed)
 
-        tk.Label(p3, text="Range Country Map (JSON):", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p3, text="Range Country Map (JSON):", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.range_country_map_var = tk.StringVar(
             value=json.dumps(
                 self.config.get(
@@ -301,51 +332,51 @@ class MainWindow:
                 separators=(",", ":")
             )
         )
-        tk.Entry(p3, textvariable=self.range_country_map_var, bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
+        tk.Entry(p3, textvariable=self.range_country_map_var, bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
 
-        tk.Label(p3, text="Iva Countries:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p3, text="Iva Countries:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.iva_country_var = tk.StringVar(value=self.config.get("iva_countries", "ALL"))
-        tk.Entry(p3, textvariable=self.iva_country_var, bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
+        tk.Entry(p3, textvariable=self.iva_country_var, bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
 
-        tk.Label(p3, text="OTP Timeout:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p3, text="OTP Timeout:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.otp_timeout_var = tk.StringVar(value=self.config.get("otp_timeout", "60"))
-        tk.Entry(p3, textvariable=self.otp_timeout_var, bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
+        tk.Entry(p3, textvariable=self.otp_timeout_var, bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
 
-        tk.Label(p3, text="Target Bot:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p3, text="Target Bot:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.target_bot_var = tk.StringVar(value=self.config.get("target_bot", "@SureSmsBot"))
-        tk.Entry(p3, textvariable=self.target_bot_var, bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
+        tk.Entry(p3, textvariable=self.target_bot_var, bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
 
         # ৪. SYSTEM & FORMAT PANEL
-        p4 = tk.LabelFrame(container, text=" ⚙ SYSTEM & FORMAT ", bg="#14171d", fg="#e67e22", font=("Segoe UI", 9, "bold"), bd=1, relief="solid", padx=10, pady=8)
+        p4 = tk.LabelFrame(container, text=" ⚙ SYSTEM & FORMAT ", bg=c["bg_panel"], fg=c["accent_orange"], font=("Segoe UI", 9, "bold"), bd=1, relief="solid", padx=10, pady=8)
         p4.pack(side="left", fill="both", expand=True, padx=4)
 
-        tk.Label(p4, text="Password:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p4, text="Password:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.pass_var = tk.StringVar(value=self.config.get("password", ""))
-        tk.Entry(p4, textvariable=self.pass_var, bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
+        tk.Entry(p4, textvariable=self.pass_var, bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
 
-        tk.Label(p4, text="FB Package:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p4, text="FB Package:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.pkg_var = tk.StringVar(value=self.config.get("fb_package", "com.facebook.lite"))
-        tk.Entry(p4, textvariable=self.pkg_var, bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
+        tk.Entry(p4, textvariable=self.pkg_var, bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
 
-        tk.Label(p4, text="Fail Limit:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p4, text="Fail Limit:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.fail_limit_var = tk.StringVar(value=self.config.get("fail_limit", "4"))
-        tk.Entry(p4, textvariable=self.fail_limit_var, bg="#1a1e26", fg="white", insertbackground="white", relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
+        tk.Entry(p4, textvariable=self.fail_limit_var, bg=c["bg_input"], fg=c["fg_primary"], insertbackground=c["fg_primary"], relief="flat", font=("Segoe UI", 9)).pack(fill="x", pady=(2, 6), ipady=3)
 
-        tk.Label(p4, text="Language:", bg="#14171d", fg="#8c95a1", font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(p4, text="Language:", bg=c["bg_panel"], fg=c["fg_muted"], font=("Segoe UI", 9)).pack(anchor="w")
         self.lang_cb = ttk.Combobox(p4, values=["English (US)", "English (UK)"], state="readonly")
         self.lang_cb.set(self.config.get("language", "English (US)"))
         self.lang_cb.pack(fill="x", pady=(2, 6))
 
         self.chk_clear_server = tk.BooleanVar(value=True)
-        tk.Checkbutton(p4, text="Continuous Clear Server", variable=self.chk_clear_server, bg="#14171d", fg="white", selectcolor="#1a1e26", activebackground="#14171d", activeforeground="white", font=("Segoe UI", 9)).pack(anchor="w", pady=(12, 0))
+        tk.Checkbutton(p4, text="Continuous Clear Server", variable=self.chk_clear_server, bg=c["bg_panel"], fg=c["fg_primary"], selectcolor=c["bg_input"], activebackground=c["bg_panel"], activeforeground=c["fg_primary"], font=("Segoe UI", 9)).pack(anchor="w", pady=(12, 0))
 
     def build_bottom_bar(self):
-        self.bottom_frame = tk.Frame(self.root, bg="#14171d", height=280, padx=15, pady=6)
+        c = self.theme.colors
+        self.bottom_frame = tk.Frame(self.root, bg=c["bg_top"], height=280, padx=15, pady=6)
         self.bottom_frame.pack(fill="both", expand=True, side="bottom")
         self.bottom_frame.pack_propagate(False)
 
-        # Resizable handle bar (Drag with mouse to resize height)
-        resize_bar = tk.Frame(self.bottom_frame, bg="#2b3038", height=5, cursor="sb_v_double_arrow")
+        resize_bar = tk.Frame(self.bottom_frame, bg=c["border"], height=5, cursor="sb_v_double_arrow")
         resize_bar.pack(side="top", fill="x", pady=(0, 4))
 
         def start_resize(event):
@@ -363,20 +394,19 @@ class MainWindow:
         resize_bar.bind("<Button-1>", start_resize)
         resize_bar.bind("<B1-Motion>", do_resize)
 
-        # Header bar with Collapse/Expand toggle
-        console_header = tk.Frame(self.bottom_frame, bg="#14171d")
+        console_header = tk.Frame(self.bottom_frame, bg=c["bg_top"])
         console_header.pack(side="top", fill="x", pady=(0, 4))
 
-        self.log_label = tk.Label(console_header, text="Ready...", bg="#14171d", fg="#a0aab5", font=("Consolas", 9), anchor="w")
+        self.log_label = tk.Label(console_header, text="Ready...", bg=c["bg_top"], fg=c["fg_secondary"], font=("Consolas", 9), anchor="w")
         self.log_label.pack(side="left", fill="x", expand=True)
 
         self.console_toggle_btn = tk.Button(
             console_header,
             text="▲ COLLAPSE",
-            bg="#2b3038",
-            fg="#ffffff",
-            activebackground="#3a424d",
-            activeforeground="#ffffff",
+            bg=c["btn_bg"],
+            fg=c["btn_fg"],
+            activebackground=c["btn_hover"],
+            activeforeground=c["btn_fg"],
             relief="flat",
             font=("Segoe UI", 8, "bold"),
             padx=8,
@@ -386,35 +416,27 @@ class MainWindow:
         )
         self.console_toggle_btn.pack(side="right", padx=(6, 0))
 
-        # Main Bottom Notebook (Tabs: 1. Process Console, 2. Number & Verify, 3. ID Creation)
-        self.console_content_frame = tk.Frame(self.bottom_frame, bg="#0f1115")
+        self.console_content_frame = tk.Frame(self.bottom_frame, bg=c["bg_root"])
         self.console_content_frame.pack(side="top", fill="both", expand=True)
-
-        style = ttk.Style()
-        style.configure("Console.TNotebook", background="#0f1115", borderwidth=0)
-        style.configure("Console.TNotebook.Tab", background="#1a1e26", foreground="#a0aab5", font=("Segoe UI", 8, "bold"), padding=[12, 6])
-        style.map("Console.TNotebook.Tab", background=[("selected", "#2ecc71")], foreground=[("selected", "#0f1115")])
 
         self.bottom_notebook = ttk.Notebook(self.console_content_frame, style="Console.TNotebook")
         self.bottom_notebook.pack(fill="both", expand=True)
 
-        # ---------------------------------------------
         # TAB 1: PROCESS CONSOLE
-        # ---------------------------------------------
-        console_tab = tk.Frame(self.bottom_notebook, bg="#0b0d10")
+        console_tab = tk.Frame(self.bottom_notebook, bg=c["bg_console"])
         self.bottom_notebook.add(console_tab, text=" 🖥️ PROCESS CONSOLE ")
 
-        c_top_bar = tk.Frame(console_tab, bg="#0b0d10", padx=5, pady=4)
+        c_top_bar = tk.Frame(console_tab, bg=c["bg_console"], padx=5, pady=4)
         c_top_bar.pack(fill="x", side="top")
-        tk.Label(c_top_bar, text="System & Process Logs", bg="#0b0d10", fg="#2ecc71", font=("Segoe UI", 8, "bold")).pack(side="left")
+        tk.Label(c_top_bar, text="System & Process Logs", bg=c["bg_console"], fg=c["accent_green"], font=("Segoe UI", 8, "bold")).pack(side="left")
 
         tk.Button(
             c_top_bar,
             text="CLEAR CONSOLE",
-            bg="#2b3038",
-            fg="#ffffff",
-            activebackground="#3a424d",
-            activeforeground="#ffffff",
+            bg=c["btn_bg"],
+            fg=c["btn_fg"],
+            activebackground=c["btn_hover"],
+            activeforeground=c["btn_fg"],
             relief="flat",
             font=("Segoe UI", 8, "bold"),
             padx=8,
@@ -425,35 +447,33 @@ class MainWindow:
 
         self.console_text = tk.Text(
             console_tab,
-            bg="#0b0d10",
-            fg="#d7dde5",
-            insertbackground="#d7dde5",
+            bg=c["bg_console"],
+            fg=c["fg_primary"],
+            insertbackground=c["fg_primary"],
             relief="flat",
             font=("Consolas", 8),
             state="disabled",
             wrap="word"
         )
-        self.console_text.tag_configure("success", foreground="#2ecc71")
-        self.console_text.tag_configure("error", foreground="#ff6b6b")
-        self.console_text.tag_configure("warning", foreground="#f1c40f")
-        self.console_text.tag_configure("info", foreground="#d7dde5")
+        self.console_text.tag_configure("success", foreground=c["success"])
+        self.console_text.tag_configure("error", foreground=c["error"])
+        self.console_text.tag_configure("warning", foreground=c["warning"])
+        self.console_text.tag_configure("info", foreground=c["fg_primary"])
         self.console_text.pack(side="top", fill="both", expand=True)
 
-        # ---------------------------------------------
         # TAB 2: NUMBER & VERIFY CONSOLE
-        # ---------------------------------------------
-        number_tab = tk.Frame(self.bottom_notebook, bg="#0b0d10")
+        number_tab = tk.Frame(self.bottom_notebook, bg=c["bg_console"])
         self.bottom_notebook.add(number_tab, text=" 📱 NUMBER & VERIFY ")
 
-        n_top_bar = tk.Frame(number_tab, bg="#0b0d10", padx=5, pady=4)
+        n_top_bar = tk.Frame(number_tab, bg=c["bg_console"], padx=5, pady=4)
         n_top_bar.pack(fill="x", side="top")
-        tk.Label(n_top_bar, text="Emulator Number Storage & OTP Verification Console", bg="#0b0d10", fg="#3498db", font=("Segoe UI", 8, "bold")).pack(side="left")
+        tk.Label(n_top_bar, text="Emulator Number Storage & OTP Verification Console", bg=c["bg_console"], fg=c["accent_blue"], font=("Segoe UI", 8, "bold")).pack(side="left")
 
         self.number_text = tk.Text(
             number_tab,
-            bg="#0b0d10",
-            fg="#3498db",
-            insertbackground="#3498db",
+            bg=c["bg_console"],
+            fg=c["accent_blue"],
+            insertbackground=c["accent_blue"],
             relief="flat",
             font=("Consolas", 8),
             state="normal",
@@ -463,17 +483,15 @@ class MainWindow:
         self.number_text.config(state="disabled")
         self.number_text.pack(side="top", fill="both", expand=True)
 
-        # ---------------------------------------------
-        # TAB 3: ID CREATION (name_list.txt)
-        # ---------------------------------------------
-        id_tab = tk.Frame(self.bottom_notebook, bg="#0b0d10")
+        # TAB 3: ID CREATION
+        id_tab = tk.Frame(self.bottom_notebook, bg=c["bg_console"])
         self.bottom_notebook.add(id_tab, text=" 👥 ID CREATION (name_list.txt) ")
 
-        id_top_bar = tk.Frame(id_tab, bg="#0b0d10", padx=5, pady=4)
+        id_top_bar = tk.Frame(id_tab, bg=c["bg_console"], padx=5, pady=4)
         id_top_bar.pack(fill="x", side="top")
-        tk.Label(id_top_bar, text="Loaded names from name_list.txt & Account Generation Status", bg="#0b0d10", fg="#e67e22", font=("Segoe UI", 8, "bold")).pack(side="left")
+        tk.Label(id_top_bar, text="Loaded names from name_list.txt & Account Generation Status", bg=c["bg_console"], fg=c["accent_orange"], font=("Segoe UI", 8, "bold")).pack(side="left")
 
-        table_frame = tk.Frame(id_tab, bg="#0b0d10")
+        table_frame = tk.Frame(id_tab, bg=c["bg_console"])
         table_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
         columns = ("ID", "NAME", "UID", "PASSWORD", "2FA", "EMAIL", "STATUS")
@@ -505,7 +523,7 @@ class MainWindow:
             self.tree.insert("", "end", iid=str(i), values=(i, name, "Pending..", self.config.get("password", "AbirCvB1Yn@11"), "...", "...", "Waiting"))
 
     def start_engine(self):
-        self.status_label.config(text="● ENGINE RUNNING", fg="#2ecc71")
+        self.status_label.config(text="● ENGINE RUNNING", fg=self.theme.colors["success"])
         thread_input = self.threads_var.get()
         self.automation_service.start_automation(thread_input)
 
@@ -602,7 +620,8 @@ class MainWindow:
         self.append_log(f"Proxy country updated: {country}")
 
     def stop_engine(self):
-        self.status_label.config(text="● SYSTEM READY", fg="#95a5a6")
+        c = self.theme.colors
+        self.status_label.config(text="● SYSTEM READY", fg=c["fg_secondary"])
         self.automation_service.stop_automation()
 
     def toggle_console(self):

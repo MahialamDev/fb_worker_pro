@@ -67,6 +67,10 @@ class AutomationService:
             self.log_callback
         )
         try:
+            fblite_apk = "apps/fblite.apk"
+            if not ld_service.is_app_installed(instance_idx, package_name):
+                ld_service.ensure_app_installed(instance_idx, package_name, fblite_apk)
+
             self.table_callback(
                 instance_idx + 1,
                 "STATUS",
@@ -100,14 +104,14 @@ class AutomationService:
                         instance_idx,
                         credentials
                     )
-                except (OSError, RuntimeError, ValueError) as error:
+                except (OSError, RuntimeError, ValueError, FileNotFoundError) as error:
                     self.log_callback(
-                        f"[Thread {instance_idx}] Super Proxy Error: {error}"
+                        f"[Thread {instance_idx}] Super Proxy Notice: {error}"
                     )
                     self.table_callback(
                         instance_idx + 1,
                         "STATUS",
-                        "Super Proxy Error"
+                        "Proxy Skipped"
                     )
             else:
                 self.log_callback(f"[Thread {instance_idx}] ⏩ Super Proxy setup skipped (Checkbox unchecked). Directly opening FB Lite.")
@@ -219,62 +223,70 @@ class AutomationService:
         except Exception:
             indices = [0]
 
-        def run_staggered_boot_sequence():
+        def run_all_boot_then_parallel_work():
+            booted_indices = []
+            ld_service_helper = LDPlayerService(
+                self.config.get("ldplayer_dir", "C:\\LDPlayer\\LDPlayer9"),
+                self.log_callback
+            )
+
+            # --- PHASE 1: Launch and Boot ALL selected emulators one after another (Staggered Sequential) ---
             for position, idx in enumerate(indices):
                 if not self.is_running:
                     break
 
-                self.log_callback(
-                    f"[Thread {idx}] LDPlayer sequential launch & boot শুরু হচ্ছে "
-                    f"({position + 1}/{len(indices)})।"
-                )
-
-                ld_service = LDPlayerService(
-                    self.config.get("ldplayer_dir", "C:\\LDPlayer\\LDPlayer9"),
-                    self.log_callback
-                )
+                self.log_callback(f"[Thread {idx}] LDPlayer {idx + 1} launch & boot শুরু হচ্ছে ({position + 1}/{len(indices)})...")
                 try:
                     self.table_callback(idx + 1, "STATUS", f"Launching LD {idx}...")
-                    ld_service.launch_instance(idx)
+                    ld_service_helper.launch_instance(idx)
 
                     threading.Thread(
-                        target=ld_service.arrange_instance_window_when_visible,
+                        target=ld_service_helper.arrange_instance_window_when_visible,
                         args=(idx,),
                         daemon=True,
                         name=f"LDPlayer-{idx}-layout"
                     ).start()
 
                     self.table_callback(idx + 1, "STATUS", f"Booting LD {idx}...")
-                    if not ld_service.wait_for_boot(idx):
+                    if ld_service_helper.wait_for_boot(idx):
+                        self.table_callback(idx + 1, "STATUS", "Booted Ready")
+                        booted_indices.append(idx)
+                        self.log_callback(f"[Thread {idx}] LDPlayer {idx + 1} boot complete.")
+                    else:
                         self.table_callback(idx + 1, "STATUS", "Boot Failed")
-                        continue
-
-                    if not self.is_running:
-                        break
-
-                    self.table_callback(idx + 1, "STATUS", "LDPlayer Ready")
-                    self.log_callback(f"[Thread {idx}] boot complete; launching independent workflow thread.")
-
-                    # Once booted, run app workflow & registration completely independently in parallel
-                    threading.Thread(
-                        target=self._open_app_in_background,
-                        args=(idx, self.config.get("fb_package", "com.facebook.lite")),
-                        daemon=True,
-                        name=f"LDPlayer-{idx}-independent-workflow"
-                    ).start()
-
                 except Exception as e:
-                    self.log_callback(f"[Thread {idx}] Startup error: {e}")
+                    self.log_callback(f"[Thread {idx}] Boot error: {e}")
                     self.table_callback(idx + 1, "STATUS", "Error")
 
-                # Pause 3 seconds between emulator boots to keep PC CPU/RAM pressure low
+                # Pause 3 seconds between emulator boots for smooth, optimal startup
                 if position < len(indices) - 1 and self.is_running:
                     time.sleep(3.0)
 
+            if not self.is_running or not booted_indices:
+                self.is_running = False
+                return
+
+            self.log_callback(f"🎉 সকল এমুলেটর বুট সম্পন্ন! এখন সবাই স্বাধীনভাবে প্যারালাল কাজ শুরু করছে...")
+
+            # --- PHASE 2: All booted emulators work completely independently in parallel ---
+            threads = []
+            for idx in booted_indices:
+                if not self.is_running:
+                    break
+                t = threading.Thread(
+                    target=self._open_app_in_background,
+                    args=(idx, self.config.get("fb_package", "com.facebook.lite")),
+                    daemon=True,
+                    name=f"LDPlayer-{idx}-independent-workflow"
+                )
+                t.start()
+                threads.append(t)
+                time.sleep(0.5)
+
         thread = threading.Thread(
-            target=run_staggered_boot_sequence,
+            target=run_all_boot_then_parallel_work,
             daemon=True,
-            name="LDPlayer-staggered-sequence"
+            name="LDPlayer-boot-then-work"
         )
         thread.start()
         return [thread]

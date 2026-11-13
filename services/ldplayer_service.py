@@ -16,15 +16,28 @@ class LDPlayerService:
         self.log_callback = log_callback
         self._window_slots = {}
         self._window_slots_lock = threading.Lock()
+        self._subprocess_lock = threading.Lock()
 
     def _log(self, message):
         print(message, flush=True)
         if self.log_callback is not None:
             self.log_callback(message)
 
+    def _run_locked(self, command, timeout=30):
+        with self._subprocess_lock:
+            for attempt in range(3):
+                result = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+                error = (result.stderr or "").strip()
+                if "device" in error.lower() and "not found" in error.lower():
+                    self._log(f"[LDPlayer] ADB device not found notice (attempt {attempt+1}); retrying...")
+                    time.sleep(2.0)
+                    continue
+                return result
+            return result
+
     def _run(self, command, description):
         self._log(f"[LDPlayer] {description}: {' '.join(command)}")
-        result = subprocess.run(command, capture_output=True, text=True)
+        result = self._run_locked(command, timeout=30)
         output = (result.stdout or "").strip()
         error = (result.stderr or "").strip()
         if output:
@@ -64,7 +77,7 @@ class LDPlayerService:
                     [self.ldconsole, "isrunning", "--index", str(index)],
                     capture_output=True,
                     text=True,
-                    timeout=15
+                    timeout=10
                 )
                 running_output = (
                     running_result.stdout or running_result.stderr
@@ -90,35 +103,26 @@ class LDPlayerService:
                             ],
                             capture_output=True,
                             text=True,
-                            timeout=15
+                            timeout=10
                         )
                     except subprocess.TimeoutExpired:
-                        self._log(
-                            f"[LDPlayer {index}] boot property check timeout; retrying..."
-                        )
-                        time.sleep(2)
+                        time.sleep(1.5)
                         continue
 
                     boot_status = (boot_result.stdout or "").strip()
-                    self._log(
-                        f"[LDPlayer {index}] boot property: "
-                        f"exit={boot_result.returncode}, "
-                        f"output={boot_status or '<empty>'}"
-                    )
-                    if boot_result.returncode != 0:
-                        self._log(
-                            f"[LDPlayer {index}] boot property check failed: "
-                            f"exit={boot_result.returncode}, "
-                            f"{(boot_result.stderr or '').strip()}"
-                        )
+                    err_status = (boot_result.stderr or "").strip()
+
+                    if "not found" in err_status.lower() or "not found" in boot_status.lower():
+                        time.sleep(1.5)
+                        continue
 
                     if any(line.strip() == "1" for line in boot_status.splitlines()):
-                        time.sleep(2)
+                        time.sleep(1.0)
                         self._log(f"[LDPlayer {index}] boot complete.")
                         return True
-            except (OSError, subprocess.SubprocessError) as error:
-                self._log(f"[LDPlayer {index}] boot check error: {error}")
-            time.sleep(2)
+            except (OSError, subprocess.SubprocessError):
+                pass
+            time.sleep(1.5)
         self._log(f"[LDPlayer {index}] boot timeout ({timeout}s).")
         return False
 
@@ -209,8 +213,41 @@ class LDPlayerService:
         self._run(command, f"opening {package_name} on LDPlayer {index}")
         self.grant_app_permissions(index, package_name)
 
+    def ensure_app_installed(self, index, package_name, apk_relative_path):
+        if self.is_app_installed(index, package_name):
+            return True
+
+        apk_path = os.path.abspath(apk_relative_path)
+        if not os.path.exists(apk_path):
+            self._log(f"[LDPlayer {index}] ⚠️ APK not found at {apk_path}")
+            return False
+
+        self._log(f"[LDPlayer {index}] 📦 Auto-installing {package_name} from {apk_path}...")
+        try:
+            with self._subprocess_lock:
+                result = subprocess.run(
+                    [self.ldconsole, "adb", "--index", str(index), "--command", f"install \"{apk_path}\""],
+                    capture_output=True, text=True, timeout=60
+                )
+                output = (result.stdout or "").strip().lower()
+                if "success" in output or result.returncode == 0:
+                    self._log(f"[LDPlayer {index}] ✅ Successfully installed {package_name}.")
+                    return True
+                else:
+                    self._log(f"[LDPlayer {index}] ⚠️ Install notice: {output}")
+        except Exception as err:
+            self._log(f"[LDPlayer {index}] ❌ Install exception for {package_name}: {err}")
+        return self.is_app_installed(index, package_name)
+
     def configure_super_proxy(self, index, credentials):
         package_name = "com.scheler.superproxy"
+        apk_path = "apps/super-proxy.apk"
+        if not self.is_app_installed(index, package_name):
+            self.ensure_app_installed(index, package_name, apk_path)
+
+        if not self.is_app_installed(index, package_name):
+            raise FileNotFoundError(f"Super Proxy app ({package_name}) could not be installed on LDPlayer {index}.")
+
         self.open_app(index, package_name)
         time.sleep(3.0)
 
@@ -375,15 +412,11 @@ class LDPlayerService:
             )
 
     def _adb_shell(self, index, command, sensitive=False):
-        result = subprocess.run(
-            [
-                self.ldconsole, "adb", "--index", str(index),
-                "--command", f"shell {command}"
-            ],
-            capture_output=True,
-            text=True,
-            timeout=20
-        )
+        cmd_args = [
+            self.ldconsole, "adb", "--index", str(index),
+            "--command", f"shell {command}"
+        ]
+        result = self._run_locked(cmd_args, timeout=20)
         if result.returncode != 0:
             detail = (result.stderr or result.stdout).strip()
             if sensitive:
@@ -391,6 +424,7 @@ class LDPlayerService:
             raise RuntimeError(
                 f"ADB command failed on LDPlayer {index}: {detail or 'no output'}"
             )
+        return result
 
     def set_clipboard(self, index, text):
         escaped = text.replace('"', '\\"').replace('$', '\\$')

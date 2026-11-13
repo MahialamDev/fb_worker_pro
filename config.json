@@ -1,5 +1,5 @@
 {
-    "threads": "1,2",
+    "threads": "1,2,3,4",
     "vpn_regions": "UK - Docklands, UK",
     "enable_2fa": true,
     "extract_cookie": false,

@@ -44,6 +44,62 @@ option and document the assumption.
 
 ## Work Log
 
+### 2026-11-12 - Remove blind 12s boot delay and optimize boot polling for ultra-smooth multi-instance startup
+
+- **Request:** Speed up boot detection across all instances (LD 2, 3, 4) and make startup feel smoother without unnecessary waiting.
+- **Decision:** Removed the blind 12-second sleep upon detecting `running` state in `wait_for_boot` (`LDPlayerService`), replacing it with fast 1.5-second polling of `sys.boot_completed`. Reduced stagger delay between boots to 3 seconds.
+- **Files changed:** `services/ldplayer_service.py`, `services/automation_service.py`, `AI_MEMORY.md`.
+- **Implementation:** Fast responsive boot polling and optimal 3s stagger pause.
+- **Validation:** `python -m compileall main.py services ui` passed with exit code 0.
+
+### 2026-11-12 - Two-phase execution: Staggered boot followed by independent parallel account creation
+
+- **Request:** Launch and boot all selected LDPlayer instances one after another (to protect PC resources), and once all are booted, let them run completely independently and freely in parallel.
+- **Decision:** Implemented a two-phase runner (`run_all_boot_then_parallel_work`) in `AutomationService`: Phase 1 sequentially boots emulators with a 5s stagger delay; Phase 2 spawns independent parallel workflow threads for all booted instances simultaneously. Added auto-installation for missing APKs (`fblite.apk` and `super-proxy.apk`).
+- **Files changed:** `services/automation_service.py`, `services/ldplayer_service.py`, `AI_MEMORY.md`.
+- **Implementation:** Two-phase staggered boot + autonomous parallel work + missing APK auto-installation.
+- **Validation:** `python -m compileall main.py services ui` passed with exit code 0.
+
+### 2026-11-12 - Graceful handling of missing Super Proxy app on instances 3 and 4
+
+- **Request:** Fix issue where instances 3 and 4 (LD 2 and LD 3) did not open Facebook Lite because Super Proxy app (`com.scheler.superproxy`) was missing on those emulator instances.
+- **Decision:** Updated `configure_super_proxy` in `LDPlayerService` to check if Super Proxy app is installed first; if not, raise a graceful `FileNotFoundError` caught by `_open_app_in_background` to skip proxy setup and smoothly proceed to open Facebook Lite.
+- **Files changed:** `services/ldplayer_service.py`, `services/automation_service.py`, `AI_MEMORY.md`.
+- **Implementation:** Missing Super Proxy detection and graceful fallback to direct FB Lite opening.
+- **Validation:** `python -m compileall main.py services ui` passed with exit code 0.
+
+### 2026-11-12 - Staggered asynchronous boot workers ensuring reliable multi-instance startup
+
+- **Request:** Ensure that all 4 instances (LD 0, 1, 2, 3) launch and boot reliably without instances 3 or 4 getting skipped or stuck.
+- **Decision:** Refactored `start_automation` in `AutomationService` to spawn each emulator boot sequence in its own asynchronous worker thread with a 5-second stagger delay, preventing any thread blocking or startup failures.
+- **Files changed:** `services/automation_service.py`, `AI_MEMORY.md`.
+- **Implementation:** Asynchronous staggered boot worker threads.
+- **Validation:** `python -m compileall main.py services ui` passed with exit code 0.
+
+### 2026-11-12 - Fix ADB "device not found" boot checking loop for multi-instance startup
+
+- **Request:** Fix issue where instances 2, 3, and 4 got stuck in a `device 'emulator-xxxx' not found` loop during boot checks.
+- **Decision:** Updated `wait_for_boot` in `LDPlayerService` to include an initial 12-second stabilization delay upon detecting `running` state so the emulator's ADB daemon fully binds, and added graceful error handling for missing devices.
+- **Files changed:** `services/ldplayer_service.py`, `AI_MEMORY.md`.
+- **Implementation:** ADB daemon stabilization pause and quiet retry for missing device errors.
+- **Validation:** `python -m compileall main.py services ui` passed with exit code 0.
+
+### 2026-11-12 - Thread-safe LDConsole/ADB subprocess locking and optimized stagger boot timing
+
+- **Request:** Prevent adb conflicts ("device not found") and CPU/RAM strain when running 4+ LDPlayer instances simultaneously by serializing console commands and staggering boot pauses.
+- **Decision:** Added a dedicated `_subprocess_lock` (`threading.Lock`) in `LDPlayerService` wrapping all `ldconsole` and `adb` executions with automatic device-not-found retry logic. Increased stagger pause between instance boots to 5 seconds.
+- **Files changed:** `services/ldplayer_service.py`, `services/automation_service.py`, `AI_MEMORY.md`.
+- **Implementation:** Thread-safe subprocess execution lock, adb retry mechanism, and smooth stagger boot delay.
+- **Validation:** `python -m compileall main.py services ui` passed with exit code 0.
+
+### 2026-11-12 - Professional UI/UX redesign with central theme engine and Dark/Light mode toggle
+
+- **Request:** Polish the entire UI/UX professionally with centralized color management and an instant Dark/Light mode toggle.
+- **Decision:** Created `ui/theme.py` storing centralized Dark and Light palettes. Integrated dynamic theme switching in `MainWindow` (`ui/main_window.py`) with a toggle button in the top navigation bar, refined padding, alignment, and styling across all panels and widgets.
+- **Files changed:** `ui/theme.py`, `ui/main_window.py`, `AI_MEMORY.md`.
+- **Implementation:** Centralized theme management and instant dynamic theme toggle.
+- **Validation:** `python -m compileall main.py services ui` passed with exit code 0.
+
 ### 2026-11-12 - Adjust Year wheel swipe count to 6-10 to prevent over-scrolling in DatePicker
 
 - **Request:** Reduce Year wheel scrolling amount so it doesn't scroll too many times and push the age too high.
