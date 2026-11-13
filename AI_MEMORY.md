@@ -44,6 +44,22 @@ option and document the assumption.
 
 ## Work Log
 
+### 2026-11-12 - Create professional README.md for GitHub repository presentation
+
+- **Request:** Create a comprehensive `README.md` file in the project root for GitHub, outlining features, tech stack, project structure, and UI screenshot reference.
+- **Decision:** Created `README.md` in the project root detailing TSB Worker Pro's architecture, 8-step registration flow, multi-instance parallel engine, theme system, and usage instructions.
+- **Files changed:** `README.md`, `AI_MEMORY.md`.
+- **Implementation:** Professional GitHub README documentation.
+- **Validation:** `python -m compileall main.py services ui` passed with exit code 0.
+
+### 2026-11-12 - Professional UI/UX polish with refined padding, heights, and typography
+
+- **Request:** Make the UI/UX fully professional with refined button padding, heights, spacing, and typography across all panels.
+- **Decision:** Updated `MainWindow` (`ui/main_window.py`) to feature refined input heights (`ipady=4`), generous LabelFrame padding (`padx=12`, `pady=10`), professional button dimensions (`padx=16`, `pady=8`), and modern spacing.
+- **Files changed:** `ui/main_window.py`, `AI_MEMORY.md`.
+- **Implementation:** Professional UI/UX redesign with polished padding and layout heights.
+- **Validation:** `python -m compileall main.py services ui` passed with exit code 0.
+
 ### 2026-11-12 - Remove blind 12s boot delay and optimize boot polling for ultra-smooth multi-instance startup
 
 - **Request:** Speed up boot detection across all instances (LD 2, 3, 4) and make startup feel smoother without unnecessary waiting.
