@@ -238,8 +238,8 @@ class AutomationService:
                     ld_service.launch_instance(idx)
 
                     threading.Thread(
-                        target=ld_service.arrange_windows_once_when_visible,
-                        args=(indices[:position + 1],),
+                        target=ld_service.arrange_instance_window_when_visible,
+                        args=(idx,),
                         daemon=True,
                         name=f"LDPlayer-{idx}-layout"
                     ).start()

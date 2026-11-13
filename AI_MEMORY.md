@@ -44,6 +44,22 @@ option and document the assumption.
 
 ## Work Log
 
+### 2026-11-12 - Adjust Year wheel swipe count to 6-10 to prevent over-scrolling in DatePicker
+
+- **Request:** Reduce Year wheel scrolling amount so it doesn't scroll too many times and push the age too high.
+- **Decision:** Updated Year swipes count in Step 4 (`LDPlayerService`) from 18-24 down to `6-10` swipes.
+- **Files changed:** `services/ldplayer_service.py`, `AI_MEMORY.md`.
+- **Implementation:** Optimized Year scroll range.
+- **Validation:** `python -m compileall main.py services ui` passed with exit code 0.
+
+### 2026-11-12 - Fix multi-instance LDPlayer window rearrangement for all instances
+
+- **Request:** Ensure that every launched LDPlayer window (LD 0, LD 1, LD 2...) gets rearranged into its correct grid slot when visible, rather than only arranging the first window.
+- **Decision:** Implemented `arrange_instance_window_when_visible` in `LDPlayerService` which polls until each specific instance's window appears and arranges all visible windows into the 4-column portrait grid.
+- **Files changed:** `services/ldplayer_service.py`, `services/automation_service.py`, `AI_MEMORY.md`.
+- **Implementation:** Per-instance window visibility polling and multi-window arrangement.
+- **Validation:** `python -m compileall main.py services ui` passed with exit code 0.
+
 ### 2026-11-12 - Staggered sequential boot with autonomous independent parallel post-boot workflows
 
 - **Request:** Launch and boot LDPlayer instances one after another (staggered) to prevent PC resource overload, but once booted, let each instance work completely independently and freely in parallel.

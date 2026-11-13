@@ -499,11 +499,14 @@ class LDPlayerService:
                     f"(row {row + 1}, column {column + 1})"
                 )
 
-    def arrange_windows_once_when_visible(self, indices, timeout=30):
+    def arrange_instance_window_when_visible(self, index, timeout=60):
         deadline = time.time() + timeout
         while time.time() < deadline:
+            if os.name != "nt":
+                return
             user32 = ctypes.windll.user32
             windows = []
+
             def enum_window(hwnd, _):
                 if not user32.IsWindowVisible(hwnd):
                     return True
@@ -515,12 +518,19 @@ class LDPlayerService:
                 if "ldplayer" in title.value.lower():
                     windows.append((hwnd, title.value))
                 return True
-            enum_windows_proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)(enum_window)
+
+            enum_windows_proc = ctypes.WINFUNCTYPE(
+                wintypes.BOOL,
+                wintypes.HWND,
+                wintypes.LPARAM
+            )(enum_window)
             user32.EnumWindows(enum_windows_proc, 0)
-            if windows:
-                self.arrange_windows(indices, retries=0)
-                self._log("[LDPlayer] Windows aligned once successfully. User can now reposition freely.")
-                return
+
+            if len(windows) > index or time.time() > deadline - 5:
+                self.arrange_windows([i for i in range(len(windows))])
+                if len(windows) > index:
+                    self._log(f"[LDPlayer {index}] Window detected and arranged successfully.")
+                    return
             time.sleep(1.0)
 
     def get_screen_size(self, index):
@@ -738,9 +748,9 @@ class LDPlayerService:
             self._adb_shell(index, f"input swipe {day_x} {y_top if d else y_bottom} {day_x} {y_bottom if d else y_top} 50", sensitive=False)
             time.sleep(0.02)
 
-        # Year: 18 to 24 quick swipes backward to guarantee age 18-24 (Young adult)
-        year_swipes = random.randint(18, 24)
-        self._log(f"[LDPlayer {index}] 🎂 Fast scrolling Year wheel {year_swipes} times for age 18-24...")
+        # Year: 6 to 10 quick swipes backward for correct adult age
+        year_swipes = random.randint(6, 10)
+        self._log(f"[LDPlayer {index}] 🎂 Fast scrolling Year wheel {year_swipes} times for adult age...")
         for _ in range(year_swipes):
             self._adb_shell(index, f"input swipe {year_x} {y_top} {year_x} {y_bottom} 50", sensitive=False)
             time.sleep(0.02)
