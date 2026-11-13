@@ -173,6 +173,8 @@ class AutomationService:
             self.log_callback
         )
         try:
+            if not self.is_running: return False
+
             self.table_callback(instance_idx + 1, "STATUS", f"Launching LD {instance_idx}...")
             self.log_callback(f"[Thread {instance_idx}] LDPlayer চালু হচ্ছে...")
             
@@ -185,25 +187,19 @@ class AutomationService:
                 name=f"LDPlayer-{instance_idx}-layout"
             ).start()
             
-            if not self.is_running: return
+            if not self.is_running: return False
 
             self.table_callback(instance_idx + 1, "STATUS", f"Booting LD {instance_idx}...")
             if not ld_service.wait_for_boot(instance_idx):
                 self.table_callback(instance_idx + 1, "STATUS", "Boot Failed")
-                return
+                return False
+
+            if not self.is_running: return False
 
             self.table_callback(instance_idx + 1, "STATUS", "LDPlayer Ready")
-            self.log_callback(
-                f"[Thread {instance_idx}] boot complete; "
-                "পরের LDPlayer এখন চালু হতে পারে।"
-            )
-            app_thread = threading.Thread(
-                target=self._open_app_in_background,
-                args=(instance_idx, self.config.get("fb_package", "com.facebook.lite")),
-                daemon=True,
-                name=f"LDPlayer-{instance_idx}-app"
-            )
-            app_thread.start()
+            self.log_callback(f"[Thread {instance_idx}] boot complete; running app workflow.")
+
+            self._open_app_in_background(instance_idx, self.config.get("fb_package", "com.facebook.lite"))
             return True
 
         except Exception as e:
@@ -223,37 +219,62 @@ class AutomationService:
         except Exception:
             indices = [0]
 
-        def run_sequence():
+        def run_staggered_boot_sequence():
             for position, idx in enumerate(indices):
                 if not self.is_running:
                     break
 
                 self.log_callback(
-                    f"[Thread {idx}] sequential launch শুরু হচ্ছে "
+                    f"[Thread {idx}] LDPlayer sequential launch & boot শুরু হচ্ছে "
                     f"({position + 1}/{len(indices)})।"
                 )
-                completed = self.run_single_thread(idx, indices[:position + 1])
-                if not completed:
-                    self.log_callback(
-                        f"[Thread {idx}] boot ব্যর্থ হওয়ায় পরের LDPlayer চালু করা হয়নি।"
-                    )
-                    break
 
+                ld_service = LDPlayerService(
+                    self.config.get("ldplayer_dir", "C:\\LDPlayer\\LDPlayer9"),
+                    self.log_callback
+                )
                 try:
-                    self.ld_service.arrange_windows(indices[:position + 1])
-                except (OSError, RuntimeError) as error:
-                    self.log_callback(
-                        f"[Thread {idx}] window arrange করা যায়নি: {error}"
-                    )
-                if position < len(indices) - 1:
-                    self.log_callback(
-                        f"[Thread {idx}] boot complete; পরের LDPlayer চালু হচ্ছে।"
-                    )
+                    self.table_callback(idx + 1, "STATUS", f"Launching LD {idx}...")
+                    ld_service.launch_instance(idx)
+
+                    threading.Thread(
+                        target=ld_service.arrange_windows_once_when_visible,
+                        args=(indices[:position + 1],),
+                        daemon=True,
+                        name=f"LDPlayer-{idx}-layout"
+                    ).start()
+
+                    self.table_callback(idx + 1, "STATUS", f"Booting LD {idx}...")
+                    if not ld_service.wait_for_boot(idx):
+                        self.table_callback(idx + 1, "STATUS", "Boot Failed")
+                        continue
+
+                    if not self.is_running:
+                        break
+
+                    self.table_callback(idx + 1, "STATUS", "LDPlayer Ready")
+                    self.log_callback(f"[Thread {idx}] boot complete; launching independent workflow thread.")
+
+                    # Once booted, run app workflow & registration completely independently in parallel
+                    threading.Thread(
+                        target=self._open_app_in_background,
+                        args=(idx, self.config.get("fb_package", "com.facebook.lite")),
+                        daemon=True,
+                        name=f"LDPlayer-{idx}-independent-workflow"
+                    ).start()
+
+                except Exception as e:
+                    self.log_callback(f"[Thread {idx}] Startup error: {e}")
+                    self.table_callback(idx + 1, "STATUS", "Error")
+
+                # Pause 3 seconds between emulator boots to keep PC CPU/RAM pressure low
+                if position < len(indices) - 1 and self.is_running:
+                    time.sleep(3.0)
 
         thread = threading.Thread(
-            target=run_sequence,
+            target=run_staggered_boot_sequence,
             daemon=True,
-            name="LDPlayer-sequence"
+            name="LDPlayer-staggered-sequence"
         )
         thread.start()
         return [thread]

@@ -550,41 +550,36 @@ class LDPlayerService:
         self._adb_shell(index, f"input tap {x} {y}", sensitive=False)
         return x, y
 
-    def _click_button(self, index, step_name, keywords, fallback_pct_x=0.50, fallback_pct_y=0.84, retries=3, is_running_check=None):
+    def _click_button(self, index, step_name, keywords, fallback_pct_x=0.50, fallback_pct_y=0.84, retries=1, is_running_check=None):
         if is_running_check and not is_running_check():
             return False
         self.dismiss_permission_popups(index)
         self._log(f"[LDPlayer {index}] 🔍 [{step_name}] Searching for button ({', '.join(keywords)})...")
-        clicked = False
-        for attempt in range(retries):
-            if is_running_check and not is_running_check():
-                return False
-            try:
-                hierarchy = self._get_ui_hierarchy(index)
-                for node in hierarchy.iter("node"):
-                    text_val = node.attrib.get("text", "").strip().lower()
-                    desc_val = node.attrib.get("content-desc", "").strip().lower()
-                    combined_label = f"{text_val} {desc_val}".strip()
 
-                    # Avoid heading paragraphs/titles: button text should be concise (<= 25 chars)
-                    if not combined_label or len(combined_label) > 25:
-                        continue
+        # Fast UI scan attempt once
+        try:
+            hierarchy = self._get_ui_hierarchy(index)
+            for node in hierarchy.iter("node"):
+                text_val = node.attrib.get("text", "").strip().lower()
+                desc_val = node.attrib.get("content-desc", "").strip().lower()
+                combined_label = f"{text_val} {desc_val}".strip()
 
-                    if any(term.lower() in combined_label for term in keywords):
-                        self._tap_and_input(index, node, None)
-                        clicked = True
-                        self._log(f"[LDPlayer {index}] ✅ [{step_name}] Clicked button '{combined_label}' via UI node match!")
-                        break
-                if clicked:
+                if not combined_label or len(combined_label) > 25:
+                    continue
+
+                if any(term.lower() in combined_label for term in keywords):
+                    self._tap_and_input(index, node, None)
+                    self._log(f"[LDPlayer {index}] ✅ [{step_name}] Clicked button '{combined_label}' via UI node match!")
+                    time.sleep(0.4)
                     return True
-            except Exception as e:
-                self._log(f"[LDPlayer {index}] [{step_name}] UI scan attempt {attempt+1} notice: {e}")
-            time.sleep(1.2)
+        except Exception:
+            pass
 
-        if not clicked and (not is_running_check or is_running_check()):
+        # Instant proportional fallback tap + Enter keyevent
+        if not is_running_check or is_running_check():
             tap_x, tap_y = self.tap_percent(index, fallback_pct_x, fallback_pct_y)
             self._log(f"[LDPlayer {index}] 📍 [{step_name}] Tapped button via proportional coordinates ({tap_x}, {tap_y}).")
-            time.sleep(1.0)
+            time.sleep(0.4)
             self._adb_shell(index, "input keyevent 66", sensitive=False)
             return True
         return False
@@ -611,8 +606,8 @@ class LDPlayerService:
             self._log(f"[LDPlayer {index}] ⏹️ Registration cancelled (Stop requested).")
             return
 
-        self._log(f"[LDPlayer {index}] 🚀 Starting step-by-step FB Lite / Meta Account Creation...")
-        time.sleep(5.0)
+        self._log(f"[LDPlayer {index}] 🚀 Starting fast step-by-step FB Lite Account Creation...")
+        time.sleep(2.0)
 
         if is_running_check and not is_running_check(): return
         self.dismiss_permission_popups(index)
@@ -629,10 +624,10 @@ class LDPlayerService:
             ["create new account", "create account", "sign up", "register", "নতুন অ্যাকাউন্ট"],
             fallback_pct_x=0.50,
             fallback_pct_y=0.88,
-            retries=3,
+            retries=2,
             is_running_check=is_running_check
         )
-        time.sleep(4.0)
+        time.sleep(1.2)
 
         if is_running_check and not is_running_check(): return
         self.dismiss_permission_popups(index)
@@ -646,22 +641,22 @@ class LDPlayerService:
             ["get started", "get_started", "শুরু করুন"],
             fallback_pct_x=0.50,
             fallback_pct_y=0.84,
-            retries=3,
+            retries=2,
             is_running_check=is_running_check
         )
-        time.sleep(3.0)
+        time.sleep(1.2)
 
         if is_running_check and not is_running_check(): return
         self.dismiss_permission_popups(index)
 
         # Ensure we have advanced off Screen 2 onto Name Screen (Screen 3)
-        if not self._wait_for_screen(index, ["name", "first name", "what's your name"], timeout=4):
+        if not self._wait_for_screen(index, ["name", "first name", "what's your name"], timeout=3):
             if is_running_check and not is_running_check(): return
             self._log(f"[LDPlayer {index}] ⚠️ Retrying 'Get started' button tap to force advance to Name screen...")
             self.tap_percent(index, 0.50, 0.84)
-            time.sleep(1.0)
+            time.sleep(0.5)
             self._adb_shell(index, "input keyevent 66", sensitive=False)
-            time.sleep(3.0)
+            time.sleep(1.2)
 
         if is_running_check and not is_running_check(): return
         self.dismiss_permission_popups(index)
@@ -678,26 +673,26 @@ class LDPlayerService:
             ]
             if len(edit_nodes) >= 2:
                 self._tap_and_input(index, edit_nodes[0], first_name)
-                time.sleep(1.0)
+                time.sleep(0.5)
                 self._tap_and_input(index, edit_nodes[1], last_name)
             else:
                 self.tap_percent(index, 0.27, 0.30)
-                time.sleep(0.5)
+                time.sleep(0.3)
                 self._adb_shell(index, f'input text "{first_name}"', sensitive=False)
-                time.sleep(1.0)
-                self.tap_percent(index, 0.73, 0.30)
                 time.sleep(0.5)
+                self.tap_percent(index, 0.73, 0.30)
+                time.sleep(0.3)
                 self._adb_shell(index, f'input text "{last_name}"', sensitive=False)
         except Exception:
             self.tap_percent(index, 0.27, 0.30)
-            time.sleep(0.5)
+            time.sleep(0.3)
             self._adb_shell(index, f'input text "{first_name}"', sensitive=False)
-            time.sleep(1.0)
-            self.tap_percent(index, 0.73, 0.30)
             time.sleep(0.5)
+            self.tap_percent(index, 0.73, 0.30)
+            time.sleep(0.3)
             self._adb_shell(index, f'input text "{last_name}"', sensitive=False)
 
-        time.sleep(2.0)
+        time.sleep(1.0)
         self._click_button(
             index,
             "Step 3: Name Next",
@@ -707,7 +702,7 @@ class LDPlayerService:
             retries=2,
             is_running_check=is_running_check
         )
-        time.sleep(4.0)
+        time.sleep(1.5)
 
         if is_running_check and not is_running_check(): return
         self.dismiss_permission_popups(index)
